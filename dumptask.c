@@ -1,76 +1,53 @@
+/*
+ * showtask, dumptask
+ * Copyright (C) 2017 CYRIL INGENIERIE
+ * Licenses: GPL2
+ */
+
 #include <linux/module.h>
-#include <linux/kthread.h>
+#include <linux/slab.h>
 #include <linux/fs.h>
+#include <linux/mm.h>
 #include <linux/cdev.h>
 #include <linux/device.h>
 #include <linux/delay.h>
 #include <linux/sched.h>
+
+#include "dumptask.h"
 
 MODULE_AUTHOR ("CyrIng");
 MODULE_DESCRIPTION ("Dump Task");
 MODULE_SUPPORTED_DEVICE ("all");
 MODULE_LICENSE ("GPL");
 
-static struct task_list_st {
-	long state;
-	int wake_cpu;
-	pid_t pid;
-	char comm[TASK_COMM_LEN];
-} tasklist[PID_MAX_DEFAULT];
+static struct task_gate_st *taskgate = NULL;
 
-static int do_dump_task(struct task_list_st *tlist)
+long do_dump_task(struct task_gate_st *gate)
 {
-	int i = 0;
+    if (gate != NULL) {
+	struct task_struct *process, *thread;
+	int cnt = 0;
 
-	struct task_struct *pTask;
-	for_each_process(pTask) {
+	rcu_read_lock();
+	for_each_process_thread(process, thread) {
+		task_lock(thread);
 
-		struct task_struct *tTask;
-		for_each_thread(pTask, tTask) {
+		gate->tasklist[cnt].state    = thread->state;
+		gate->tasklist[cnt].wake_cpu = thread->wake_cpu;
+		gate->tasklist[cnt].pid      = thread->pid;
+		memcpy(gate->tasklist[cnt].comm, thread->comm, TASK_COMM_LEN);
 
-			tlist[i].state	  = tTask->state;
-			tlist[i].wake_cpu = tTask->wake_cpu;
-			tlist[i].pid	  = tTask->pid;
-			memcpy(tlist[i].comm, tTask->comm, TASK_COMM_LEN);
-
-		i++;
-		}
+		task_unlock(thread);
+		cnt++;
 	}
-	return(i);
-}
+	rcu_read_unlock();
+	gate->count = cnt;
 
-static struct task_struct *dump_tid = NULL;
-
-int dump_threadfunc(void *arg)
-{
-	if (arg != NULL) {
-		struct task_list_st *ptasklist = (struct task_list_st *) arg;
-
-		int b = 0;
-		while (!kthread_should_stop()) {
-			int i;
-			i = do_dump_task(ptasklist);
-
-			msleep(1000);
-
-			while (i > 1) {
-				printk("dumptask: cpu[%d][%ld] task: %s (%d)\n",
-					tasklist[i].wake_cpu,
-					tasklist[i].state,
-					tasklist[i].comm,
-					tasklist[i].pid);
-
-					i--;
-			}
-			b = !b;
-			printk("dumptask: %s\n", b ? "Tick" : "Tock");
-		}
-	}
 	return(0);
+    } else {
+	return(-1);
+    }
 }
-
-#define	DEVNAME "dumptask"
-#define	FILENAME "/dev/"DEVNAME
 
 static struct {
 	int major;
@@ -79,69 +56,131 @@ static struct {
 	struct class *clsdev;
 } dumptask_dev;
 
-static struct file_operations dumptask_fops = {
-	.open	= nonseekable_open,
-};
-
-static int __init dumptask_init(void)
+static int dumptask_mmap(struct file *pfile, struct vm_area_struct *vma)
 {
-	dumptask_dev.kcdev = cdev_alloc();
-	dumptask_dev.kcdev->ops = &dumptask_fops;
-	dumptask_dev.kcdev->owner = THIS_MODULE;
-
-        if (alloc_chrdev_region(&dumptask_dev.nmdev, 0, 1, FILENAME) >= 0) {
-		dumptask_dev.major = MAJOR(dumptask_dev.nmdev);
-		dumptask_dev.mkdev = MKDEV(dumptask_dev.major,0);
-
-		if (cdev_add(dumptask_dev.kcdev, dumptask_dev.mkdev, 1) >= 0) {
-			struct device *tmpdev;
-
-			dumptask_dev.clsdev =class_create(THIS_MODULE, DEVNAME);
-
-			if ((tmpdev=device_create(dumptask_dev.clsdev,
-						NULL,
-						dumptask_dev.mkdev,
-						NULL,
-						DEVNAME)) != NULL) {
-
-				dump_tid = kthread_create(dump_threadfunc,
-							tasklist,
-							"dump_threadfunc");
-				if (dump_tid == NULL)
-					return(-EBUSY);
-				else {
-				  printk("dumptask: loaded [mem=%lu/max=%lu]\n",
-					sizeof(tasklist),
-					sizeof(tasklist) / sizeof(tasklist[0]));
-
-					wake_up_process(dump_tid);
-				}
-			} else {
-				printk("dumptask: device_create():KO\n");
-				return(-EBUSY);
-			}
-		} else {
-			printk("dumptask: cdev_add():KO\n");
-			return(-EBUSY);
-		}
-	} else {
-		printk("dumptask: alloc_chrdev_region():KO\n");
-		return(-EBUSY);
+	if (vma->vm_pgoff == 0) {
+	    if ((taskgate != NULL)
+	      && remap_pfn_range(vma,
+				vma->vm_start,
+				virt_to_phys((void *) taskgate) >> PAGE_SHIFT,
+				vma->vm_end - vma->vm_start,
+				vma->vm_page_prot) < 0)
+		return(-EIO);
 	}
 	return(0);
 }
 
+static DEFINE_MUTEX(dumptask_mutex);	/* Only one driver instance. */
+
+static int dumptask_open(struct inode *inode, struct file *pfile)
+{
+	if (!mutex_trylock(&dumptask_mutex))
+		return(-EBUSY);
+	else
+		return(0);
+}
+
+static int dumptask_release(struct inode *inode, struct file *pfile)
+{
+	mutex_unlock(&dumptask_mutex);
+	return(0);
+}
+
+static long dumptask_ioctl(struct file *filp,unsigned int cmd,unsigned long arg)
+{
+	long rc;
+	switch (cmd) {
+	case DUMPTASK_IOCTL_DUMP:
+		rc = do_dump_task(taskgate);
+		break;
+	default:
+		rc = 0;
+	}
+	return(rc);
+}
+
+static struct file_operations dumptask_fops = {
+	.open    = dumptask_open,
+	.release = dumptask_release,
+	.mmap    = dumptask_mmap,
+	.unlocked_ioctl = dumptask_ioctl,
+	.owner   = THIS_MODULE,
+};
+
+void dumptask_cleandev(int level)
+{
+	switch (level) {
+	case 4:
+		device_destroy(dumptask_dev.clsdev, dumptask_dev.mkdev);
+		/* fallthrough */
+	case 3:
+		class_destroy(dumptask_dev.clsdev);
+		/* fallthrough */
+	case 2:
+		cdev_del(dumptask_dev.kcdev);
+		/* fallthrough */
+	case 1:
+		unregister_chrdev_region(dumptask_dev.mkdev, 1);
+		/* fallthrough */
+	default:
+		break;
+	}
+}
+
+static int __init dumptask_init(void)
+{
+    dumptask_dev.kcdev = cdev_alloc();
+    dumptask_dev.kcdev->ops = &dumptask_fops;
+    dumptask_dev.kcdev->owner = THIS_MODULE;
+
+    if (alloc_chrdev_region(&dumptask_dev.nmdev, 0, 1, DRV_FILENAME) >= 0) {
+	dumptask_dev.major = MAJOR(dumptask_dev.nmdev);
+	dumptask_dev.mkdev = MKDEV(dumptask_dev.major,0);
+
+	if (cdev_add(dumptask_dev.kcdev, dumptask_dev.mkdev, 1) >= 0) {
+	    struct device *tmpdev;
+
+	    dumptask_dev.clsdev = class_create(THIS_MODULE, DEVNAME);
+
+	    if ((tmpdev=device_create(dumptask_dev.clsdev,
+					NULL,
+					dumptask_dev.mkdev,
+					NULL,
+					DEVNAME)) != NULL) {
+
+		unsigned long reqSize = sizeof(struct task_gate_st);
+		unsigned long reqPage = ROUND_TO_PAGE(reqSize);
+
+		if ((taskgate = kmalloc(reqPage, GFP_KERNEL)) != NULL) {
+			printk( "dumptask: loaded[page=%lu,size=%lu,"	\
+				"slot=%lu,pid=%d]\n",
+				reqPage, reqSize,
+				sizeof(struct task_list_st), PID_MAX_DEFAULT);
+		} else {
+			dumptask_cleandev(4);
+			return(-ENOMEM);
+		}
+	    } else {
+		dumptask_cleandev(3);
+		return(-EBUSY);
+	    }
+	} else {
+	    dumptask_cleandev(2);
+	    return(-EBUSY);
+	}
+    } else {
+	dumptask_cleandev(1);
+	return(-EBUSY);
+    }
+    return(0);
+}
+
 static void __exit dumptask_cleanup(void)
 {
-	device_destroy(dumptask_dev.clsdev, dumptask_dev.mkdev);
-	class_destroy(dumptask_dev.clsdev);
-	cdev_del(dumptask_dev.kcdev);
-	unregister_chrdev_region(dumptask_dev.mkdev, 1);
+	dumptask_cleandev(4);
 
-	if (dump_tid != NULL)
-		kthread_stop(dump_tid);
-	else
-		printk("dumptask: no kthread to stop !\n");
+	if (taskgate != NULL)
+		kfree(taskgate);
 
 	printk("dumptask: unload\n");
 }
