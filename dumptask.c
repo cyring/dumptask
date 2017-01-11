@@ -10,7 +10,6 @@
 #include <linux/mm.h>
 #include <linux/cdev.h>
 #include <linux/device.h>
-#include <linux/delay.h>
 #include <linux/sched.h>
 
 #include "dumptask.h"

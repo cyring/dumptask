@@ -36,25 +36,29 @@ int main(int argc, char *argv[])
 	struct task_gate_st *taskgate = NULL;
 	unsigned long reqSize = sizeof(struct task_gate_st);
 	unsigned long reqPage = ROUND_TO_PAGE(reqSize);
-/*
-	printf("showtask: mmap[page=%lu,size=%lu,slot=%lu,pid=%d]\n",
-		reqPage, reqSize, sizeof(struct task_list_st),PID_MAX_DEFAULT);
-*/
-	if (!rc && ((drv = open(DRV_FILENAME, O_RDWR|O_SYNC)) != -1)) {
-		if ((taskgate = mmap(NULL, reqPage,
-				PROT_READ|PROT_WRITE, MAP_SHARED,
-				drv, 0)) != NULL) {
 
-			if (ioctl(drv, DUMPTASK_IOCTL_DUMP, NULL) != -1)
-				showtask(taskgate);
+	if (argc == 2) {
+		if (!strncmp(argv[1], "-d", 2))
+			printf("showtask: mmap[page=%lu,size=%lu,slot=%lu,pid=%d]\n",
+			reqPage, reqSize, sizeof(struct task_list_st),PID_MAX_DEFAULT);
+	}
+	if (!rc) {
+		if ((drv = open(DRV_FILENAME, O_RDWR|O_SYNC)) != -1) {
+			if ((taskgate = mmap(NULL, reqPage,
+					PROT_READ|PROT_WRITE, MAP_SHARED,
+					drv, 0)) != NULL) {
 
-			munmap(taskgate, reqPage);
+				if (ioctl(drv, DUMPTASK_IOCTL_DUMP, NULL) != -1)
+					showtask(taskgate);
+
+				munmap(taskgate, reqPage);
+			}
+			else
+				rc = 3;
+			close(drv);
 		}
 		else
 			rc = 3;
-		close(drv);
 	}
-	else
-		rc = 3;
 	return(rc);
 }
