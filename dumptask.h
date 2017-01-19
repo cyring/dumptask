@@ -22,14 +22,16 @@
 #define ROUND_TO_PAGE(_size)	PAGE_SIZE * ((_size / PAGE_SIZE) 	\
 				+ ((_size % PAGE_SIZE)? 1 : 0));
 
-#define DUMPTASK_IOCTL_MAGIC 0xc3
+#define DUMPTASK_IOCTL_MAGIC 0xc6
 #define DUMPTASK_IOCTL_DUMP _IO(DUMPTASK_IOCTL_MAGIC, 0)
 
 struct task_list_st {
-	long state;
-	int wake_cpu;
-	pid_t pid;
-	char comm[TASK_COMM_LEN];
+	long	state;
+	int	wake_cpu;
+	pid_t	pid,
+		tgid,
+		ppid;
+	char	comm[TASK_COMM_LEN];
 };
 
 struct task_gate_st {

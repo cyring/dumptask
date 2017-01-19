@@ -34,6 +34,8 @@ long do_dump_task(struct task_gate_st *gate)
 		gate->tasklist[cnt].state    = thread->state;
 		gate->tasklist[cnt].wake_cpu = thread->wake_cpu;
 		gate->tasklist[cnt].pid      = thread->pid;
+		gate->tasklist[cnt].tgid     = thread->tgid;
+		gate->tasklist[cnt].ppid     = thread->parent->pid;
 		memcpy(gate->tasklist[cnt].comm, thread->comm, TASK_COMM_LEN);
 
 		task_unlock(thread);

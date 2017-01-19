@@ -16,15 +16,20 @@
 
 void showtask(struct task_gate_st *gate)
 {
-	printf("cpu\tstate\t\ttask\t\tpid\n");
+	printf(	"   cpu      state     |      task      |"	\
+		"             pid     tgid     ppid\n"		\
+		"----------------------+----------------+"	\
+		"----------------------------------\n");
 
 	int cnt;
 	for (cnt = 0; cnt < gate->count; cnt++) {
-		printf("%d\t%ld\t%16s\t%d\n",
+		printf("%5d  %8ld       |%16s|          %5d    %5d    %5d\n",
 			gate->tasklist[cnt].wake_cpu,
 			gate->tasklist[cnt].state,
 			gate->tasklist[cnt].comm,
-			gate->tasklist[cnt].pid);
+			gate->tasklist[cnt].pid,
+			gate->tasklist[cnt].tgid,
+			gate->tasklist[cnt].ppid);
 
 	}
 	printf("%d tasks\n", gate->count);
