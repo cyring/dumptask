@@ -43,27 +43,30 @@ int main(int argc, char *argv[])
 	unsigned long reqPage = ROUND_TO_PAGE(reqSize);
 
 	if (argc == 2) {
-		if (!strncmp(argv[1], "-d", 2))
-			printf("showtask: mmap[page=%lu,size=%lu,slot=%lu,pid=%d]\n",
-			reqPage, reqSize, sizeof(struct task_list_st),PID_MAX_DEFAULT);
+	    if (!strncmp(argv[1], "-d", 2))
+		printf("showtask: mmap[page=%lu,size=%lu,slot=%lu,pid=%d]\n",
+		reqPage, reqSize, sizeof(struct task_list_st),PID_MAX_DEFAULT);
 	}
 	if (!rc) {
 		if ((drv = open(DRV_FILENAME, O_RDWR|O_SYNC)) != -1) {
 			if ((taskgate = mmap(NULL, reqPage,
 					PROT_READ|PROT_WRITE, MAP_SHARED,
-					drv, 0)) != NULL) {
+					drv, 0)) != MAP_FAILED) {
 
 				if (ioctl(drv, DUMPTASK_IOCTL_DUMP, NULL) != -1)
 					showtask(taskgate);
+				else
+					rc = 4;
 
-				munmap(taskgate, reqPage);
+				if (munmap(taskgate, reqPage) == -1)
+					rc = 5;
 			}
 			else
 				rc = 3;
 			close(drv);
 		}
 		else
-			rc = 3;
+			rc = 2;
 	}
 	return(rc);
 }
