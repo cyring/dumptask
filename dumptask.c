@@ -4,13 +4,19 @@
  * Licenses: GPL2
  */
 
+#include <linux/version.h>
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/fs.h>
 #include <linux/mm.h>
 #include <linux/cdev.h>
 #include <linux/device.h>
+
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(4, 11, 0)
+#include <linux/sched/signal.h>
+#else
 #include <linux/sched.h>
+#endif
 
 #include "dumptask.h"
 
