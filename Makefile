@@ -1,5 +1,5 @@
 # showtask, dumptask
-# Copyright (C) 2017 CYRIL INGENIERIE
+# Copyright (C) 2017-2018 CYRIL INGENIERIE
 # Licenses: GPL2
 
 obj-m := dumptask.o

@@ -46,5 +46,5 @@ dumptask: unload
 # About
 [CyrIng](https://github.com/cyring)
 
-Copyright (C) 2017 CYRIL INGENIERIE
+Copyright (C) 2017-2018 CYRIL INGENIERIE
  -------
