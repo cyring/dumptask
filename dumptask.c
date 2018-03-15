@@ -1,6 +1,6 @@
 /*
  * showtask, dumptask
- * Copyright (C) 2017 CYRIL INGENIERIE
+ * Copyright (C) 2017-2018 CYRIL INGENIERIE
  * Licenses: GPL2
  */
 
@@ -40,11 +40,11 @@ long do_dump_task(struct task_gate_st *gate)
 		gate->tasklist[cnt].runtime  = thread->se.sum_exec_runtime;
 		gate->tasklist[cnt].usertime = thread->utime;
 		gate->tasklist[cnt].systime  = thread->stime;
-		gate->tasklist[cnt].state    = (short int) thread->state;
-		gate->tasklist[cnt].wake_cpu = (short int) thread->wake_cpu;
 		gate->tasklist[cnt].pid      = thread->pid;
 		gate->tasklist[cnt].tgid     = thread->tgid;
 		gate->tasklist[cnt].ppid     = thread->parent->pid;
+		gate->tasklist[cnt].state    = (short int) thread->state;
+		gate->tasklist[cnt].wake_cpu = (short int) thread->wake_cpu;
 		memcpy(gate->tasklist[cnt].comm, thread->comm, TASK_COMM_LEN);
 
 		task_unlock(thread);
