@@ -23,7 +23,7 @@ void showtask(struct task_gate_st *gate)
 
 	int cnt;
 	for (cnt = 0; cnt < gate->count; cnt++) {
-		printf("%5d  %8ld       |%16s|          %5d    %5d    %5d\n",
+		printf("%5hd  %8hx       |%16s|          %5d    %5d    %5d\n",
 			gate->tasklist[cnt].wake_cpu,
 			gate->tasklist[cnt].state,
 			gate->tasklist[cnt].comm,
@@ -39,17 +39,13 @@ int main(int argc, char *argv[])
 {
 	int rc = (geteuid() != 0), drv = -1;
 	struct task_gate_st *taskgate = NULL;
-	unsigned long reqSize = sizeof(struct task_gate_st);
-	unsigned long reqPage = ROUND_TO_PAGE(reqSize);
+	size_t reqSize = sizeof(struct task_gate_st);
+	int reqOrder = get_order(reqSize);
+	int reqPages = PAGE_SIZE << reqOrder;
 
-	if (argc == 2) {
-	    if (!strncmp(argv[1], "-d", 2))
-		printf("showtask: mmap[page=%lu,size=%lu,slot=%lu,pid=%d]\n",
-		reqPage, reqSize, sizeof(struct task_list_st),PID_MAX_DEFAULT);
-	}
 	if (!rc) {
 		if ((drv = open(DRV_FILENAME, O_RDWR|O_SYNC)) != -1) {
-			if ((taskgate = mmap(NULL, reqPage,
+			if ((taskgate = mmap(NULL, reqPages,
 					PROT_READ|PROT_WRITE, MAP_SHARED,
 					drv, 0)) != MAP_FAILED) {
 
@@ -58,7 +54,7 @@ int main(int argc, char *argv[])
 				else
 					rc = 4;
 
-				if (munmap(taskgate, reqPage) == -1)
+				if (munmap(taskgate, reqPages) == -1)
 					rc = 5;
 			}
 			else
@@ -67,6 +63,13 @@ int main(int argc, char *argv[])
 		}
 		else
 			rc = 2;
+	}
+	if (argc == 2) {
+	    if (!strncmp(argv[1], "-d", 2))
+		printf("\nshowtask: mmap[order=%d,size=%zd,pages=%d,"	\
+			"slot=%zd,pid=%d]\n",
+			reqOrder, reqSize, reqPages,
+			sizeof(struct task_list_st),PID_MAX_DEFAULT);
 	}
 	return(rc);
 }

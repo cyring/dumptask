@@ -37,8 +37,11 @@ long do_dump_task(struct task_gate_st *gate)
 	for_each_process_thread(process, thread) {
 		task_lock(thread);
 
-		gate->tasklist[cnt].state    = thread->state;
-		gate->tasklist[cnt].wake_cpu = thread->wake_cpu;
+		gate->tasklist[cnt].runtime  = thread->se.sum_exec_runtime;
+		gate->tasklist[cnt].usertime = thread->utime;
+		gate->tasklist[cnt].systime  = thread->stime;
+		gate->tasklist[cnt].state    = (short int) thread->state;
+		gate->tasklist[cnt].wake_cpu = (short int) thread->wake_cpu;
 		gate->tasklist[cnt].pid      = thread->pid;
 		gate->tasklist[cnt].tgid     = thread->tgid;
 		gate->tasklist[cnt].ppid     = thread->parent->pid;
@@ -155,13 +158,15 @@ static int __init dumptask_init(void)
 					NULL,
 					DEVNAME)) != NULL) {
 
-		unsigned long reqSize = sizeof(struct task_gate_st);
-		unsigned long reqPage = ROUND_TO_PAGE(reqSize);
+		size_t reqSize = sizeof(struct task_gate_st);
+		int reqOrder = get_order(reqSize);
+		int reqPages = PAGE_SIZE << reqOrder;
 
-		if ((taskgate = kmalloc(reqPage, GFP_KERNEL)) != NULL) {
-			printk( "dumptask: loaded[page=%lu,size=%lu,"	\
-				"slot=%lu,pid=%d]\n",
-				reqPage, reqSize,
+		if ((taskgate = alloc_pages_exact(reqSize, GFP_KERNEL)) != NULL)
+		{
+			printk( "dumptask: loaded[order=%d,size=%zd,pages=%d,"\
+				"slot=%zd,pid=%d]\n",
+				reqOrder, reqSize, reqPages,
 				sizeof(struct task_list_st), PID_MAX_DEFAULT);
 		} else {
 			dumptask_cleandev(4);
@@ -186,9 +191,10 @@ static void __exit dumptask_cleanup(void)
 {
 	dumptask_cleandev(4);
 
-	if (taskgate != NULL)
-		kfree(taskgate);
-
+	if (taskgate != NULL) {
+		size_t reqSize = sizeof(struct task_gate_st);
+		free_pages_exact(taskgate, reqSize);
+	}
 	printk("dumptask: unload\n");
 }
 
