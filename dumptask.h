@@ -4,6 +4,9 @@
  * Licenses: GPL2
  */
 
+#define LOCKLESS " "
+#define BUS_LOCK "lock "
+
 #define BITBSR(_base, _index)				\
 ({							\
 	register unsigned char _ret = 0;		\
@@ -13,11 +16,40 @@
 		"setz	%[ret]"				\
 		: [ret]   "+r" (_ret),			\
 		  [index] "=r" (_index) 		\
-		: [base]  "r" (_base)			\
+		: [base]  "rm" (_base)			\
 		: "cc", "memory"			\
 	);						\
 	_ret;						\
 })
+
+#define _BITCLR_GPR(_lock, _base, _offset)	\
+({						\
+	asm volatile				\
+	(					\
+	_lock	"btrq	%%rdx,	%[base]"	\
+		: [base] "=m" (_base)		\
+		: "d" (_offset)			\
+		: "cc", "memory"		\
+	);					\
+})
+
+#define _BITCLR_IMM(_lock, _base, _imm8)	\
+({						\
+	asm volatile				\
+	(					\
+	_lock	"btrq	%[imm8], %[base]"	\
+		: [base] "=m" (_base)		\
+		: [imm8] "i" (_imm8)		\
+		: "cc", "memory"		\
+	);					\
+})
+
+#define BITCLR(_lock, _base, _offset)			\
+(							\
+	__builtin_constant_p(_offset) ?			\
+		_BITCLR_IMM(_lock, _base, _offset)	\
+	:	_BITCLR_GPR(_lock, _base, _offset)	\
+)
 
 #define DEVNAME "dumptask"
 #define DRV_FILENAME "/dev/"DEVNAME
@@ -47,8 +79,11 @@
 		int z = n, i = -1;	\
 		z--;			\
 		z >>= PAGE_SHIFT;	\
-		BITBSR(z, i);		\
-		i + 1;			\
+		if (BITBSR(z, i) == 1)	\
+			i = 0;		\
+		else			\
+			i++;		\
+		i;			\
 	})
 #endif
 
