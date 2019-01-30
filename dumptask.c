@@ -1,6 +1,6 @@
 /*
  * showtask, dumptask
- * Copyright (C) 2017-2018 CYRIL INGENIERIE
+ * Copyright (C) 2017-2019 CYRIL INGENIERIE
  * Licenses: GPL2
  */
 
