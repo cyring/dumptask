@@ -34,9 +34,8 @@ long do_dump_task(struct task_gate_st *gate)
 	int cnt = 0;
 
 	rcu_read_lock();
-	for_each_process_thread(process, thread) {
-		task_lock(thread);
-
+	for_each_process_thread(process, thread)
+	{
 		gate->tasklist[cnt].runtime  = thread->se.sum_exec_runtime;
 		gate->tasklist[cnt].usertime = thread->utime;
 		gate->tasklist[cnt].systime  = thread->stime;
@@ -47,7 +46,6 @@ long do_dump_task(struct task_gate_st *gate)
 		gate->tasklist[cnt].wake_cpu = (short int) thread->wake_cpu;
 		memcpy(gate->tasklist[cnt].comm, thread->comm, TASK_COMM_LEN);
 
-		task_unlock(thread);
 		cnt++;
 	}
 	rcu_read_unlock();
